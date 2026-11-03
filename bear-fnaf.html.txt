@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>熊出没五夜后宫</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif;}
+body{background:#111;color:#fff;overflow:hidden;user-select:none}
+#gameWrap{width:100vw;height:100vh;position:relative;}
+/* 开始界面 */
+#startScreen{position:absolute;inset:0;background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;text-align:center;padding:20px;}
+#startScreen h1{font-size:4rem;color:#cd3333;margin-bottom:16px}
+#startScreen p{max-width:600px;margin:8px 0;color:#aaa;font-size:18px;line-height:1.6}
+#startBtn{margin-top:24px;padding:14px 40px;font-size:22px;background:#992222;color:#fff;border:none;border-radius:8px;cursor:pointer}
+#startBtn:hover{background:#bb3333}
+/* 游戏主视图 */
+#roomView{position:absolute;inset:0;background:#221f1c;display:none;}
+/* 顶部状态栏 */
+#statusBar{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;z-index:10;}
+.statusBox{background:rgba(0,0,0,0.7);padding:8px 14px;border-radius:6px;font-size:16px}
+#powerBar{width:220px;height:22px;background:#333;border-radius:4px;overflow:hidden;margin-top:4px}
+#powerFill{height:100%;background:#3c6;transition:width 0.2s}
+/* 房间画面 */
+#roomCanvas{width:100%;height:100%;display:block}
+/* 控制面板 */
+#controlPanel{position:absolute;bottom:12px;left:12px;right:12px;display:flex;gap:10px;flex-wrap:wrap;z-index:10}
+.ctrlBtn{padding:10px 14px;font-size:15px;background:#333;border:1px solid #666;color:#fff;border-radius:6px;cursor:pointer}
+.ctrlBtn:hover{background:#444}
+.ctrlBtn:active{background:#222}
+.ctrlBtn.active{background:#275;border-color:#49f}
+.ctrlBtn:disabled{opacity:0.4;cursor:not-allowed}
+/* 监控面板 */
+#camPanel{position:absolute;top:80px;right:12px;width:340px;background:rgba(0,0,0,0.8);padding:12px;border-radius:8px;display:none;z-index:10}
+#camView{width:100%;height:200px;background:#111;border:2px solid #444;margin-bottom:8px}
+#camName{font-size:17px;margin-bottom:8px}
+.camList{display:flex;gap:6px;flex-wrap:wrap}
+.camBtn{padding:6px 10px;background:#222;border:1px solid #555;color:#fff;border-radius:4px;cursor:pointer}
+.camBtn.active{background:#258;border-color:#4af}
+/* 道具栏 */
+#itemPanel{position:absolute;bottom:110px;left:12px;background:rgba(0,0,0,0.7);padding:10px;border-radius:8px;z-index:10}
+.itemBtn{padding:8px;margin:4px;background:#333;border:1px solid #666;color:#fff;border-radius:4px;cursor:pointer}
+.itemBtn:disabled{opacity:0.3}
+/* 提示文字 */
+#tipText{position:absolute;bottom:240px;left:14px;color:#ffdd44;font-size:16px;background:rgba(0,0,0,0.6);padding:6px;border-radius:4px;z-index:10}
+/* 跳杀画面 */
+#jumpScare{position:absolute;inset:0;background:#000;display:none;align-items:center;justify-content:center;z-index:150}
+#jumpScare img{max-width:100%;max-height:100%;object-fit:contain}
+/* 失败/通关界面 */
+#gameOverScreen,#winScreen,#sunriseScreen{position:absolute;inset:0;background:#000;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:200;text-align:center;padding:20px}
+#gameOverScreen h2{color:#f44;font-size:3rem;margin-bottom:16px}
+#winScreen h2,#sunriseScreen h2{color:#4f8;font-size:3rem;margin-bottom:16px}
+#restartBtn,#nextNightBtn,#replayBtn{margin-top:20px;padding:12px 30px;font-size:20px;background:#337;color:#fff;border:none;border-radius:6px;cursor:pointer}
+.hintSmall{color:#aaa;margin-top:12px;font-size:15px}
+</style>
+</head>
+<body>
+<div id="gameWrap">
+    <!-- 开始界面 -->
+    <div id="startScreen">
+        <h1>熊出没五夜后宫</h1>
+        <p>你是光头强，守在森林木屋，午夜12点到清晨6点。</p>
+        <p>熊大走正门，熊二爬窗户；吉吉毛毛要香蕉，蹦蹦偷道具，萝卜头挖洞拆门。</p>
+        <p>合理分配电力，撑过五个夜晚，逃离森林！</p>
+        <p class="hintSmall">快捷键：空格=面具 | ← →切换监控 | 1锤子 2喇叭 3肥波 4香蕉</p>
+        <button id="startBtn">开始游戏</button>
+    </div>
+
+    <!-- 游戏主场景 -->
+    <div id="roomView">
+        <canvas id="roomCanvas"></canvas>
+        <div id="statusBar">
+            <div class="statusBox">
+                夜晚：<span id="nightNum">1</span> | 时间：<span id="gameTime">12:00 AM</span>
+                <div id="powerBar"><div id="powerFill"></div></div>
+                <div>电力：<span id="powerText">100%</span></div>
+            </div>
+            <div class="statusBox">
+                <button id="camToggle" class="ctrlBtn">打开监控</button>
+            </div>
+        </div>
+
+        <div id="camPanel">
+            <div id="camName">摄像头 1 - 正门</div>
+            <canvas id="camView"></canvas>
+            <div class="camList">
+                <button class="camBtn" data-cam="0">正门</button>
+                <button class="camBtn" data-cam="1">窗外</button>
+                <button class="camBtn" data-cam="2">森林小路</button>
+                <button class="camBtn" data-cam="3">屋后</button>
+            </div>
+        </div>
+
+        <div id="itemPanel">
+            <div>道具栏</div>
+            <button class="itemBtn" id="itemHammer">锤子 [1]</button>
+            <button class="itemBtn" id="itemSpeaker">喇叭 [2]</button>
+            <button class="itemBtn" id="itemFeibo">肥波 [3]</button>
+            <button class="itemBtn" id="itemBanana">香蕉[4]</button>
+        </div>
+
+        <div id="tipText">游戏提示：观察监控，小心熊大靠近正门！</div>
+
+        <div id="controlPanel">
+            <button class="ctrlBtn" id="doorBtn">正门：关闭</button>
+            <button class="ctrlBtn" id="curtainBtn">窗帘：拉开</button>
+            <button class="ctrlBtn" id="maskBtn">面具：摘下</button>
+        </div>
+    </div>
+
+    <!-- 跳杀 -->
+    <div id="jumpScare">
+        <img id="jumpImg" src="" alt="惊吓">
+    </div>
+
+    <!-- 失败界面 -->
+    <div id="gameOverScreen">
+        <h2>你被抓住了！</h2>
+        <p id="deathReason"></p>
+        <button id="restartBtn">重试本夜</button>
+    </div>
+
+    <!-- 通关单夜 -->
+    <div id="winScreen">
+        <h2>天亮了！本晚安全度过</h2>
+        <p>准备迎接下一晚的挑战</p>
+        <button id="nextNightBtn">下一夜</button>
+    </div>
+
+    <!-- 5夜全部通关彩蛋界面 -->
+    <div id="sunriseScreen">
+        <h2>第六日·日出 【彩蛋】</h2>
+        <p>阳光洒满森林，熊大、熊二、吉吉毛毛、蹦蹦、萝卜头全部在远处挥手，赵琳也出现了！</p>
+        <p>光头强成功离开森林，冒险结束！</p>
+        <button id="replayBtn">重新开始</button>
+    </div>
+</div>
+
+<script>
+// ======== 游戏全局状态 ========
+const state = {
+    night: 1,
+    time: 0, // 0=12点，100=6点
+    power: 100,
+    powerDrain: 0.06,
+    running: false,
+    camOpen: false,
+    currentCam:0,
+    doorClosed:false,
+    curtainClosed:false,
+    maskOn:false,
+    // 道具
+    items:{
+        hammer:3,
+        speaker:3,
+        feibo:2,
+        banana:5
+    },
+    // AI角色状态
+    ai:{
+        bear1:{stage:0,active:true},
+        bear2:{stage:0,active:true},
+        jiji:{stage:0,wantBanana:false,feiboBlock:false},
+        bengbeng:{stage:0,hovering:false},
+        luobotou:{stage:0}
+    },
+    jumpScareActive:false
+};
+
+// DOM
+const $ = s=>document.querySelector(s);
+const $$ = s=>document.querySelectorAll(s);
+const startScreen = $("#startScreen");
+const roomView = $("#roomView");
+const roomCanvas = $("#roomCanvas");
+const roomCtx = roomCanvas.getContext('2d');
+const camCanvas = $("#camView");
+const camCtx = camCanvas.getContext('2d');
+
+function resizeCanvas(){
+    roomCanvas.width = window.innerWidth;
+    roomCanvas.height = window.innerHeight;
+    camCanvas.width = $("#camView").offsetWidth;
+    camCanvas.height = $("#camView").offsetHeight;
+}
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas();
+
+// UI绑定
+$("#startBtn").onclick = startGame;
+$("#camToggle").onclick = ()=>{
+    state.camOpen = !state.camOpen;
+    $("#camPanel").style.display = state.camOpen ? "block":"none";
+    $("#camToggle").innerText = state.camOpen ? "关闭监控":"打开监控";
+};
+$("#doorBtn").onclick = ()=>{
+    if(state.power <=0) return setTip("没电了，无法操作！");
+    state.doorClosed = !state.doorClosed;
+    $("#doorBtn").innerText = state.doorClosed ? "正门：打开":"正门：关闭";
+};
+$("#curtainBtn").onclick = ()=>{
+    if(state.power <=0) return setTip("没电了，无法操作！");
+    state.curtainClosed = !state.curtainClosed;
+    $("#curtainBtn").innerText = state.curtainClosed ? "窗帘：拉开":"窗帘：拉上";
+};
+$("#maskBtn").onclick = toggleMask;
+
+$("#itemHammer").onclick = useHammer;
+$("#itemSpeaker").onclick = useSpeaker;
+$("#itemFeibo").onclick = useFeibo;
+$("#itemBanana").onmousedown = holdBanana;
+$("#itemBanana").onmouseup = stopBanana;
+
+$$(".camBtn").forEach(btn=>{
+    btn.onclick = ()=>{
+        $$(".camBtn").forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        state.currentCam = Number(btn.dataset.cam);
+    }
+})
+$("#restartBtn").onclick = ()=>{
+    $("#gameOverScreen").style.display="none";
+    resetNight();
+};
+$("#nextNightBtn").onclick = ()=>{
+    $("#winScreen").style.display="none";
+    state.night +=1;
+    resetNight();
+};
+$("#replayBtn").onclick = ()=>{
+    $("#sunriseScreen").style.display="none";
+    state.night = 1;
+    resetNight();
+}
+
+// 键盘
+document.addEventListener('keydown',e=>{
+    if(!state.running || state.jumpScareActive) return;
+    switch(e.code){
+        case 'Space': toggleMask();break;
+        case 'ArrowLeft': state.currentCam = Math.max(0,state.currentCam-1);updateCamBtns();break;
+        case 'ArrowRight': state.currentCam = Math.min(3,state.currentCam+1);updateCamBtns();break;
+        case 'Digit1': useHammer();break;
+        case 'Digit2': useSpeaker();break;
+        case 'Digit3': useFeibo();break;
+        case 'Digit4': holdBanana();break;
+    }
+});
+document.addEventListener('keyup',e=>{
+    if(e.code === 'Digit4') stopBanana();
+})
+function updateCamBtns(){
+    $$(".camBtn").forEach((b,i)=>b.classList.toggle('active',i===state.currentCam));
+}
+
+// 功能
+function toggleMask(){
+    if(state.power <=0) return setTip("没电！");
+    state.maskOn = !state.maskOn;
+    $("#maskBtn").innerText = state.maskOn ? "面具：戴上":"面具：摘下";
+}
+function setTip(txt){$("#tipText").innerText = txt;}
+
+let bananaHoldTimer = null;
+function holdBanana(){
+    if(state.items.banana <=0){setTip("香蕉用完了！");return;}
+    setTip("正在喂毛毛...");
+    bananaHoldTimer = setInterval(()=>{
+        if(state.ai.jiji.wantBanana){
+            state.ai.jiji.stage = 0;
+            state.ai.jiji.wantBanana = false;
+            state.items.banana -=0.02;
+            updateItemUI();
+            setTip("毛毛吃到香蕉，吉吉平静下来");
+        }
+    },100);
+}
+function stopBanana(){clearInterval(bananaHoldTimer);}
+
+function useHammer(){
+    if(state.items.hammer <=0){setTip("锤子用完");return;}
+    state.items.hammer--;
+    state.ai.luobotou.stage = 0;
+    setTip("锤子驱赶萝卜头！");
+    updateItemUI();
+}
+function useSpeaker(){
+    if(state.items.speaker <=0){setTip("喇叭用完");return;}
+    state.items.speaker--;
+    state.ai.luobotou.stage = 0;
+    setTip("喇叭声音引走萝卜头");
+    updateItemUI();
+}
+function useFeibo(){
+    if(state.items.feibo <=0){setTip("肥波已用完");return;}
+    if(state.ai.jiji.stage >=3 && !state.ai.jiji.feiboBlock){
+        state.items.feibo--;
+        state.ai.jiji.feiboBlock = true;
+        state.ai.jiji.stage = 0;
+        setTip("肥波冲出来挡住吉吉！");
+        updateItemUI();
+    }else{
+        setTip("现在用不了肥波");
+    }
+}
+function updateItemUI(){
+    $("#itemHammer").disabled = state.items.hammer <=0;
+    $("#itemSpeaker").disabled = state.items.speaker <=0;
+    $("#itemFeibo").disabled = state.items.feibo <=0;
+    $("#itemBanana").disabled = state.items.banana <=0;
+}
+
+function startGame(){
+    startScreen.style.display="none";
+    roomView.style.display="block";
+    resetNight();
+    state.running = true;
+    gameLoop();
+}
+
+function resetNight(){
+    state.time = 0;
+    state.power = 100;
+    state.doorClosed=false;
+    state.curtainClosed=false;
+    state.maskOn=false;
+    state.camOpen=false;
+    $("#camPanel").style.display="none";
+    $("#camToggle").innerText="打开监控";
+    $("#doorBtn").innerText="正门：关闭";
+    $("#curtainBtn").innerText="窗帘：拉开";
+    $("#maskBtn").innerText="面具：摘下";
+    // 难度随夜晚增加AI速度
+    const diff = state.night * 0.2;
+    state.ai.bear1.stage = 0; state.ai.bear1.active=true;
+    state.ai.bear2.stage = 0; state.ai.bear2.active=true;
+    state.ai.jiji.stage =0; state.ai.jiji.wantBanana=false; state.ai.jiji.feiboBlock=false;
+    state.ai.bengbeng.stage=0;
+    state.ai.luobotou.stage=0;
+    state.items = {hammer:3,speaker:3,feibo:2,banana:5};
+    updateItemUI();
+    state.jumpScareActive=false;
+    setTip(`第${state.night}夜开始！小心！难度+${diff.toFixed(1)}`);
+}
+
+// 跳杀
+function triggerJumpScare(name){
+    state.jumpScareActive = true;
+    state.running = false;
+    $("#jumpScare").style.display="flex";
+    // 简易色块惊吓代替图片，无外部资源依赖
+    $("#jumpImg").src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect width='100%25' height='100%25' fill='%23220000'/%3E%3Ctext x='400' y='300' font-size='60' fill='%23ff3333' text-anchor='middle'%3E"+name+"抓到你！%3C/text%3E%3C/svg%3E";
+    setTimeout(()=>{
+        $("#jumpScare").style.display="none";
+        $("#gameOverScreen").style.display="flex";
+        $("#deathReason").innerText = name+"闯入木屋抓住了你";
+    },1200);
+}
+
+// 游戏主循环
+function gameLoop(){
+    if(!state.running) return;
+    // 时间推进
+    const speed = 0.08 + state.night * 0.03;
+    state.time += speed;
+    if(state.time >=100){
+        state.running=false;
+        if(state.night >=5){
+            $("#sunriseScreen").style.display="flex";
+        }else{
+            $("#winScreen").style.display="flex";
+        }
+        return;
+    }
+    // 电力消耗
+    let drain = state.powerDrain;
+    if(state.camOpen) drain +=0.025;
+    if(state.doorClosed) drain +=0.03;
+    if(state.curtainClosed) drain +=0.02;
+    state.power -= drain;
+    if(state.power <=0){
+        state.power = 0;
+        setTip("断电！所有防御失效！");
+        // 断电后熊大直接抓人
+        if(state.ai.bear1.stage >=2){
+            triggerJumpScare("熊大");
+        }
+    }
+
+    // AI逻辑
+    updateAI();
+
+    // UI更新
+    updateStatusUI();
+    drawRoom();
+    drawCam();
+    requestAnimationFrame(gameLoop);
+}
+
+function updateAI(){
+    const diff = state.night * 0.12;
+    // 熊大：正门
+    if(Math.random() < 0.008 + diff){
+        state.ai.bear1.stage++;
+        if(state.ai.bear1.stage >=3){
+            if(state.doorClosed === false){
+                triggerJumpScare("熊大");
+            }else{
+                state.ai.bear1.stage = 2;
+                setTip("熊大在正门撞门！关门挡住了！");
+            }
+        }
+    }
+    // 熊二：窗户
+    if(Math.random() <0.007 + diff){
+        state.ai.bear2.stage++;
+        if(state.ai.bear2.stage >=3){
+            if(state.curtainClosed || state.maskOn){
+                state.ai.bear2.stage=2;
+                setTip("熊二看到面具/窗帘，暂时退走");
+            }else{
+                triggerJumpScare("熊二");
+            }
+        }
+    }
+    // 吉吉毛毛
+    if(Math.random() <0.004 + diff && state.ai.jiji.stage ===0){
+        state.ai.jiji.wantBanana=true;
+        state.ai.jiji.stage =1;
+        setTip("毛毛来了！长按香蕉投喂！");
+    }
+    if(state.ai.jiji.wantBanana && Math.random()<0.01){
+        state.ai.jiji.stage++;
+        if(state.ai.jiji.stage >=3){
+            if(state.ai.jiji.feiboBlock){
+                state.ai.jiji.stage=0;
+                state.ai.jiji.feiboBlock=false;
+                setTip("肥波挡住吉吉，吉吉撤退");
+            }else{
+                triggerJumpScare("吉吉");
+            }
+        }
+    }
+    // 蹦蹦：悬停监控可阻止
+    if(Math.random() <0.005 + diff){
+        state.ai.bengbeng.stage++;
+        if(state.ai.bengbeng.stage>=2){
+            if(state.camOpen && state.currentCam ===2){
+                state.ai.bengbeng.stage=0;
+                setTip("你盯着蹦蹦，它不敢偷道具");
+            }else{
+                const lost = Object.keys(state.items)[Math.floor(Math.random()*4)];
+                state.items[lost] = Math.max(0, state.items[lost]-1);
+                updateItemUI();
+                setTip("蹦蹦偷走了道具！");
+                state.ai.bengbeng.stage=0;
+            }
+        }
+    }
+    // 萝卜头挖洞拆门，锤子/喇叭驱赶
+    if(Math.random() <0.005 + diff){
+        state.ai.luobotou.stage++;
+        if(state.ai.luobotou.stage >=3){
+            triggerJumpScare("萝卜头");
+        }
+    }
+}
+
+function updateStatusUI(){
+    $("#nightNum").innerText = state.night;
+    const hour = Math.floor(12 + state.time * 0.06);
+    $("#gameTime").innerText = `${hour}:${String(Math.floor((state.time %1)*60)).padStart(2,'0')} ${state.time >=50 ? "AM":"AM"}`;
+    const pct = Math.max(0,state.power);
+    $("#powerFill").style.width = pct+"%";
+    $("#powerText").innerText = Math.round(pct)+"%";
+}
+
+// 绘制房间画布
+function drawRoom(){
+    const ctx = roomCtx;
+    const w = roomCanvas.width;
+    const h = roomCanvas.height;
+    ctx.fillStyle="#1c1a18";
+    ctx.fillRect(0,0,w,h);
+    ctx.fillStyle="#333";
+    ctx.fillRect(w*0.1,h*0.2,w*0.2,h*0.6); //正门
+    ctx.fillRect(w*0.7,h*0.2,w*0.2,h*0.6); //窗户
+    ctx.fillStyle="#442";
+    ctx.font="24px sans-serif";
+    ctx.fillText("木屋正门",w*0.12,h*0.18);
+    ctx.fillText("窗户",w*0.74,h*0.18);
+    if(state.doorClosed){
+        ctx.fillStyle="#111";ctx.fillRect(w*0.1,h*0.2,w*0.2,h*0.6);
+        ctx.fillStyle="#a33";ctx.fillText("【门已关】",w*0.12,h*0.5);
+    }
+    if(state.curtainClosed){
+        ctx.fillStyle="#222";ctx.fillRect(w*0.7,h*0.2,w*0.2,h*0.6);
+        ctx.fillStyle="#a33";ctx.fillText("【窗帘拉上】",w*0.72,h*0.5);
+    }
+    if(state.maskOn){
+        ctx.fillStyle="rgba(255,255,255,0.12)";
+        ctx.fillRect(0,0,w,h);
+        ctx.fillStyle="#ffd";
+        ctx.font="36px sans-serif";
+        ctx.fillText("防熊面具佩戴中",w*0.35,h*0.12);
+    }
+}
+// 绘制监控画面
+function drawCam(){
+    const ctx = camCtx;
+    const w = camCanvas.width;
+    const h = camCanvas.height;
+    ctx.fillStyle="#0f0f0f";
+    ctx.fillRect(0,0,w,h);
+    ctx.fillStyle="#282";
+    ctx.font="20px sans-serif";
+    const camNames = ["正门摄像头","窗外摄像头","森林小路","屋后"];
+    $("#camName").innerText = camNames[state.currentCam];
+    // 在对应摄像头绘制角色靠近进度
+    ctx.fillText(camNames[state.currentCam],10,28);
+    ctx.font="18px";
+    if(state.currentCam ===0){
+        ctx.fillText("熊大进度："+state.ai.bear1.stage,10,60);
+    }else if(state.currentCam ===1){
+        ctx.fillText("熊二进度："+state.ai.bear2.stage,10,60);
+    }else if(state.currentCam ===2){
+        ctx.fillText("蹦蹦进度："+state.ai.bengbeng.stage,10,60);
+    }else if(state.currentCam ===3){
+        ctx.fillText("萝卜头进度："+state.ai.luobotou.stage,10,60);
+    }
+}
+</script>
+</body>
+</html>
